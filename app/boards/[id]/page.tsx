@@ -6,6 +6,7 @@ import { getBoardAccess } from "@/lib/auth/board-access";
 import { BoardView } from "@/components/board/BoardView";
 import { LabelManager } from "@/components/board/LabelManager";
 import { MembersPanel } from "@/components/board/MembersPanel";
+import { OfflineIndicator } from "@/components/board/OfflineIndicator";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 
 export const dynamic = "force-dynamic";
@@ -101,6 +102,7 @@ export default async function BoardDetailPage({
             {access.isOwner ? "소유자" : "멤버"}
           </span>
           <div className="ml-auto flex items-center gap-2">
+            <OfflineIndicator />
             <ThemeToggle />
             <LabelManager boardId={board.id} initialLabels={board.labels} />
             <MembersPanel

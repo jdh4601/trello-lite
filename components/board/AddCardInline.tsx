@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, ApiClientError } from "@/lib/api-client";
+import { api, ApiClientError, OfflineQueuedError } from "@/lib/api-client";
 import { useInFlight } from "@/lib/hooks/use-in-flight";
 
 export function AddCardInline({ listId }: { listId: string }) {
@@ -24,6 +24,10 @@ export function AddCardInline({ listId }: { listId: string }) {
         setTitle("");
         router.refresh();
       } catch (err) {
+        if (err instanceof OfflineQueuedError) {
+          setTitle("");
+          return;
+        }
         alert(err instanceof ApiClientError ? err.message : "카드 추가 실패");
       }
     });

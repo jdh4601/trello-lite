@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, ApiClientError } from "@/lib/api-client";
+import { api, ApiClientError, OfflineQueuedError } from "@/lib/api-client";
 import { readJSON, remove, StorageKeys, writeJSON } from "@/lib/storage/web-storage";
 import type { Label } from "./types";
 
@@ -98,6 +98,11 @@ export function CardModal({
       router.refresh();
       onClose();
     } catch (err) {
+      if (err instanceof OfflineQueuedError) {
+        remove("session", draftKey);
+        onClose();
+        return;
+      }
       setError(err instanceof ApiClientError ? err.message : "저장 실패");
     } finally {
       setSaving(false);
@@ -113,6 +118,11 @@ export function CardModal({
       router.refresh();
       onClose();
     } catch (err) {
+      if (err instanceof OfflineQueuedError) {
+        remove("session", draftKey);
+        onClose();
+        return;
+      }
       setError(err instanceof ApiClientError ? err.message : "삭제 실패");
       setSaving(false);
     }

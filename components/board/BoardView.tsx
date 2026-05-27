@@ -18,7 +18,7 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { api, ApiClientError } from "@/lib/api-client";
+import { api, ApiClientError, OfflineQueuedError } from "@/lib/api-client";
 import { computeInsertPosition } from "@/lib/position";
 import { bindHandlers, subscribeBoard, unsubscribeBoard } from "@/lib/realtime/client";
 import type { CardRealtime, ListRealtime } from "@/lib/realtime/events";
@@ -256,6 +256,10 @@ export function BoardView({
         });
         router.refresh();
       } catch (err) {
+        if (err instanceof OfflineQueuedError) {
+          // Optimistic state stays; the queue will replay on reconnect.
+          return;
+        }
         setLists(previousLists);
         alert(err instanceof ApiClientError ? err.message : "카드 이동 실패");
       }

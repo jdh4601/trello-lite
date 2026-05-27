@@ -1,6 +1,10 @@
 /**
  * Tiny fetch wrapper that throws on non-2xx and returns parsed JSON `.data`.
  * Server responses follow the shape: `{ data: ... }` or `{ error: { code, message } }`.
+ *
+ * On network failure (offline / DNS) the wrapper enqueues card mutations
+ * into IndexedDB so they can be flushed on reconnect (TRE-11). Non-card
+ * mutations and reads still surface the error to the caller.
  */
 
 export class ApiClientError extends Error {
@@ -13,13 +17,15 @@ export class ApiClientError extends Error {
   }
 }
 
+export class OfflineQueuedError extends Error {
+  constructor() {
+    super("OFFLINE_QUEUED");
+  }
+}
+
+type Method = "GET" | "POST" | "PATCH" | "DELETE" | "PUT";
 type FetchOptions = Omit<RequestInit, "body"> & { body?: unknown };
 
-/**
- * Attach the originating socket id on every mutation so the realtime
- * broadcaster can exclude us — prevents double-application of our own
- * optimistic update.
- */
 async function realtimeHeader(): Promise<Record<string, string>> {
   if (typeof window === "undefined") return {};
   try {
@@ -31,21 +37,50 @@ async function realtimeHeader(): Promise<Record<string, string>> {
   }
 }
 
+function isCardMutation(path: string, method: Method | undefined): boolean {
+  if (!method || method === "GET") return false;
+  return /^\/api\/cards(\/|$)/.test(path);
+}
+
+function cardOpType(path: string, method: Method): "card:create" | "card:update" | "card:delete" {
+  if (method === "DELETE") return "card:delete";
+  if (method === "POST") return "card:create";
+  return "card:update";
+}
+
 export async function api<T = unknown>(
   path: string,
   options: FetchOptions = {},
 ): Promise<T> {
   const { body, headers, ...rest } = options;
+  const method = (rest.method as Method | undefined) ?? "GET";
   const rtHeaders = await realtimeHeader();
-  const res = await fetch(path, {
-    ...rest,
-    headers: {
-      "Content-Type": "application/json",
-      ...rtHeaders,
-      ...(headers ?? {}),
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+
+  let res: Response;
+  try {
+    res = await fetch(path, {
+      ...rest,
+      headers: {
+        "Content-Type": "application/json",
+        ...rtHeaders,
+        ...(headers ?? {}),
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  } catch (err) {
+    // Network unreachable — queue card mutations so they replay on reconnect.
+    if (typeof window !== "undefined" && isCardMutation(path, method)) {
+      const { enqueue } = await import("@/lib/offline/queue");
+      await enqueue({
+        type: cardOpType(path, method),
+        method: method as "POST" | "PATCH" | "DELETE",
+        path,
+        body,
+      });
+      throw new OfflineQueuedError();
+    }
+    throw err;
+  }
 
   if (res.status === 204) return undefined as T;
 
