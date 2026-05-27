@@ -32,6 +32,16 @@
 
 13일 (2026-05-27 → 2026-06-09), 12개 트레이서 불릿 슬라이스로 분할. 진행 상황은 Linear 프로젝트에서 추적.
 
+## 🚀 배포 (Vercel + Neon)
+
+자세한 단계는 [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) 참고.
+
+요약:
+1. **Vercel** — https://vercel.com/new 에서 `jdh4601/trello-lite` import
+2. **Storage** 탭 → **Neon Postgres** 추가 (`DATABASE_URL` 자동 주입)
+3. **Settings → Environment Variables** 에 `JWT_SECRET` 추가 (`openssl rand -base64 32`)
+4. push to `main` → 자동 배포 + 마이그레이션 자동 적용
+
 ## 🔗 저장소
 
 https://github.com/jdh4601/trello-lite
