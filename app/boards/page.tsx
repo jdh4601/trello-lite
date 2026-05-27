@@ -12,10 +12,13 @@ export default async function BoardsPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
+  // Owned + invited boards together; the BoardCard surfaces the role.
   const boards = await prisma.board.findMany({
-    where: { ownerId: user.id },
+    where: {
+      OR: [{ ownerId: user.id }, { members: { some: { userId: user.id } } }],
+    },
     orderBy: { updatedAt: "desc" },
-    select: { id: true, name: true, updatedAt: true },
+    select: { id: true, name: true, ownerId: true, updatedAt: true },
   });
 
   return (
@@ -41,7 +44,12 @@ export default async function BoardsPage() {
             {boards.map((board) => (
               <BoardCard
                 key={board.id}
-                board={{ ...board, updatedAt: board.updatedAt.toISOString() }}
+                board={{
+                  id: board.id,
+                  name: board.name,
+                  updatedAt: board.updatedAt.toISOString(),
+                  role: board.ownerId === user.id ? "OWNER" : "MEMBER",
+                }}
               />
             ))}
           </div>

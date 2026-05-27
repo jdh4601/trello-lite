@@ -10,13 +10,27 @@ export async function GET() {
   const user = await getCurrentUser();
   if (!user) return apiError("UNAUTHORIZED", "로그인이 필요합니다.");
 
+  // Owned boards + boards I've been invited to.
   const boards = await prisma.board.findMany({
-    where: { ownerId: user.id },
+    where: {
+      OR: [{ ownerId: user.id }, { members: { some: { userId: user.id } } }],
+    },
     orderBy: { updatedAt: "desc" },
-    select: { id: true, name: true, ownerId: true, createdAt: true, updatedAt: true },
+    select: {
+      id: true,
+      name: true,
+      ownerId: true,
+      createdAt: true,
+      updatedAt: true,
+    },
   });
 
-  return NextResponse.json({ data: { boards } });
+  const boardsWithRole = boards.map((b) => ({
+    ...b,
+    role: b.ownerId === user.id ? ("OWNER" as const) : ("MEMBER" as const),
+  }));
+
+  return NextResponse.json({ data: { boards: boardsWithRole } });
 }
 
 export async function POST(req: Request) {

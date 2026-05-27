@@ -20,7 +20,8 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  ownedBoards Board[] @relation("BoardOwner")
+  ownedBoards Board[]       @relation("BoardOwner")
+  memberships BoardMember[]
 }
 
 model Board {
@@ -31,9 +32,28 @@ model Board {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  lists List[]
+  lists   List[]
+  members BoardMember[]
 
   @@index([ownerId])
+}
+
+enum BoardRole {
+  OWNER
+  MEMBER
+}
+
+model BoardMember {
+  boardId   String
+  userId    String
+  role      BoardRole @default(MEMBER)
+  createdAt DateTime  @default(now())
+
+  board Board @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([boardId, userId])
+  @@index([userId])
 }
 
 model List {

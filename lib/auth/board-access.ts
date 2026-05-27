@@ -8,8 +8,8 @@ export type BoardAccess = {
 /**
  * Resolve a user's relationship to a board.
  *
- * Slice 8 (TRE-8) will introduce explicit BoardMember rows for invited users;
- * until then, only the owner has access.
+ * Owner has implicit member access; explicit BoardMember rows grant access
+ * to invited users (see TRE-8).
  */
 export async function getBoardAccess(
   userId: string,
@@ -21,10 +21,14 @@ export async function getBoardAccess(
   });
   if (!board) return null;
 
-  return {
-    isOwner: board.ownerId === userId,
-    isMember: board.ownerId === userId,
-  };
+  const isOwner = board.ownerId === userId;
+  if (isOwner) return { isOwner: true, isMember: true };
+
+  const membership = await prisma.boardMember.findUnique({
+    where: { boardId_userId: { boardId, userId } },
+    select: { boardId: true },
+  });
+  return { isOwner: false, isMember: membership !== null };
 }
 
 export async function requireBoardOwner(userId: string, boardId: string): Promise<void> {
