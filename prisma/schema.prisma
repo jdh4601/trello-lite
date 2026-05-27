@@ -1,0 +1,21 @@
+// Prisma schema for FlowBoard
+// Models added incrementally per slice. Current slice adds User to satisfy
+// the Prisma client generation requirement; full auth wiring happens in TRE-2.
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Added in Slice 1 to satisfy Prisma; expanded in Slice 2 (TRE-2) with
+// passwordHash, name, and relations.
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  createdAt DateTime @default(now())
+}
