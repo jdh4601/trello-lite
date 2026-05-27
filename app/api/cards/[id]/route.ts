@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { apiError } from "@/lib/api-error";
 import { BoardAccessError, requireBoardMember } from "@/lib/auth/board-access";
 import { updateCardSchema } from "@/lib/schemas/card";
+import { minGap, PRECISION_THRESHOLD, rebalance } from "@/lib/position";
 
 export const dynamic = "force-dynamic";
 
@@ -46,8 +47,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
   const parsed = updateCardSchema.safeParse(body);
   if (!parsed.success) return apiError("VALIDATION_FAILED", "입력값을 확인해주세요.");
 
-  // If moving to a different list, validate that the target list belongs to
-  // the same board (no cross-board moves).
+  // Cross-board moves are blocked: target list must live on the same board.
   if (parsed.data.listId && parsed.data.listId !== ctx.listId) {
     const target = await prisma.list.findUnique({
       where: { id: parsed.data.listId },
@@ -59,23 +59,66 @@ export async function PATCH(req: Request, { params }: Ctx) {
     }
   }
 
-  const card = await prisma.card.update({
-    where: { id },
-    data: {
-      ...parsed.data,
-      dueDate:
-        parsed.data.dueDate === undefined ? undefined : parsed.data.dueDate
-          ? new Date(parsed.data.dueDate)
-          : null,
-    },
-    select: {
-      id: true,
-      listId: true,
-      title: true,
-      description: true,
-      position: true,
-      dueDate: true,
-    },
+  const data = parsed.data;
+
+  const card = await prisma.$transaction(async (tx) => {
+    const updated = await tx.card.update({
+      where: { id },
+      data: {
+        ...data,
+        dueDate:
+          data.dueDate === undefined ? undefined : data.dueDate ? new Date(data.dueDate) : null,
+      },
+      select: {
+        id: true,
+        listId: true,
+        title: true,
+        description: true,
+        position: true,
+        dueDate: true,
+      },
+    });
+
+    // If position changed, check whether the destination list needs rebalancing.
+    if (data.position !== undefined || data.listId !== undefined) {
+      const affectedListIds = new Set<string>([updated.listId]);
+      if (data.listId && data.listId !== ctx.listId) affectedListIds.add(ctx.listId);
+
+      for (const listId of affectedListIds) {
+        const siblings = await tx.card.findMany({
+          where: { listId },
+          orderBy: { position: "asc" },
+          select: { id: true, position: true },
+        });
+        if (siblings.length < 2) continue;
+        if (minGap(siblings.map((s) => s.position)) >= PRECISION_THRESHOLD) continue;
+
+        // Neighbors too close — re-space everything to integer steps. One
+        // transaction ensures clients never observe a partial state.
+        const positions = rebalance(siblings.length);
+        for (let i = 0; i < siblings.length; i++) {
+          await tx.card.update({
+            where: { id: siblings[i]!.id },
+            data: { position: positions[i] },
+          });
+        }
+      }
+
+      // Re-fetch in case the moving card was itself rebalanced.
+      return tx.card.findUniqueOrThrow({
+        where: { id },
+        select: {
+          id: true,
+          listId: true,
+          title: true,
+          description: true,
+          position: true,
+          dueDate: true,
+        },
+      });
+    }
+
+    return updated;
   });
 
   return NextResponse.json({ data: { card } });

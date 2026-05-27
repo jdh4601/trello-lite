@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useDroppable } from "@dnd-kit/core";
 import { api, ApiClientError } from "@/lib/api-client";
 import { AddCardInline } from "./AddCardInline";
 import { CardItem } from "./CardItem";
@@ -10,13 +11,14 @@ import type { CardData } from "./CardModal";
 export type ColumnData = {
   id: string;
   name: string;
-  cards: CardData[];
+  cards: Array<CardData & { position: number }>;
 };
 
 export function Column({ list }: { list: ColumnData }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(list.name);
+  const { setNodeRef, isOver } = useDroppable({ id: list.id });
 
   async function rename() {
     const trimmed = name.trim();
@@ -49,7 +51,12 @@ export function Column({ list }: { list: ColumnData }) {
   }
 
   return (
-    <div className="w-72 shrink-0 rounded-lg bg-neutral-100 p-2 dark:bg-neutral-800">
+    <div
+      ref={setNodeRef}
+      className={`w-72 shrink-0 rounded-lg bg-neutral-100 p-2 dark:bg-neutral-800 ${
+        isOver ? "ring-2 ring-blue-400" : ""
+      }`}
+    >
       <header className="flex items-center justify-between px-2 py-1.5">
         {editing ? (
           <input

@@ -2,8 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth/session";
-import { AddListInline } from "@/components/board/AddListInline";
-import { Column } from "@/components/board/Column";
+import { BoardView } from "@/components/board/BoardView";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +29,7 @@ export default async function BoardDetailPage({
           position: true,
           cards: {
             orderBy: { position: "asc" },
-            select: { id: true, title: true, description: true },
+            select: { id: true, title: true, description: true, position: true },
           },
         },
       },
@@ -52,19 +51,7 @@ export default async function BoardDetailPage({
           <h1 className="text-xl font-semibold">{board.name}</h1>
         </header>
 
-        <div className="flex gap-4 overflow-x-auto pb-4">
-          {board.lists.map((list) => (
-            <Column
-              key={list.id}
-              list={{
-                id: list.id,
-                name: list.name,
-                cards: list.cards,
-              }}
-            />
-          ))}
-          <AddListInline boardId={board.id} />
-        </div>
+        <BoardView boardId={board.id} lists={board.lists} />
       </div>
     </main>
   );
