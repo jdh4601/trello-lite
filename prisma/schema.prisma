@@ -3,7 +3,8 @@
 // the Prisma client generation requirement; full auth wiring happens in TRE-2.
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {
