@@ -31,5 +31,17 @@ model Board {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  lists List[]
+
   @@index([ownerId])
+}
+
+model List {
+  id       String @id @default(cuid())
+  boardId  String
+  name     String
+  position Float
+  board    Board  @relation(fields: [boardId], references: [id], onDelete: Cascade)
+
+  @@index([boardId, position])
 }

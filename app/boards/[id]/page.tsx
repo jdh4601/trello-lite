@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth/session";
+import { AddListInline } from "@/components/board/AddListInline";
+import { Column } from "@/components/board/Column";
 
 export const dynamic = "force-dynamic";
 
@@ -16,14 +18,22 @@ export default async function BoardDetailPage({
   const { id } = await params;
   const board = await prisma.board.findUnique({
     where: { id },
-    select: { id: true, name: true, ownerId: true },
+    select: {
+      id: true,
+      name: true,
+      ownerId: true,
+      lists: {
+        orderBy: { position: "asc" },
+        select: { id: true, name: true, position: true },
+      },
+    },
   });
   if (!board) notFound();
   if (board.ownerId !== user.id) notFound();
 
   return (
-    <main className="min-h-screen px-6 py-8">
-      <div className="max-w-6xl mx-auto space-y-6">
+    <main className="min-h-screen px-6 py-6">
+      <div className="max-w-full space-y-4">
         <header className="flex items-center gap-4">
           <Link
             href="/boards"
@@ -33,11 +43,13 @@ export default async function BoardDetailPage({
           </Link>
           <h1 className="text-xl font-semibold">{board.name}</h1>
         </header>
-        <section className="rounded-lg border border-dashed border-neutral-300 p-12 text-center dark:border-neutral-700">
-          <p className="text-sm text-neutral-500">
-            리스트와 카드는 다음 슬라이스에서 구현됩니다.
-          </p>
-        </section>
+
+        <div className="flex gap-4 overflow-x-auto pb-4">
+          {board.lists.map((list) => (
+            <Column key={list.id} list={{ id: list.id, name: list.name }} />
+          ))}
+          <AddListInline boardId={board.id} />
+        </div>
       </div>
     </main>
   );
