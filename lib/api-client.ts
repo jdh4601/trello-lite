@@ -15,15 +15,33 @@ export class ApiClientError extends Error {
 
 type FetchOptions = Omit<RequestInit, "body"> & { body?: unknown };
 
+/**
+ * Attach the originating socket id on every mutation so the realtime
+ * broadcaster can exclude us — prevents double-application of our own
+ * optimistic update.
+ */
+async function realtimeHeader(): Promise<Record<string, string>> {
+  if (typeof window === "undefined") return {};
+  try {
+    const { currentSocketId } = await import("@/lib/realtime/client");
+    const id = currentSocketId();
+    return id ? { "X-Socket-Id": id } : {};
+  } catch {
+    return {};
+  }
+}
+
 export async function api<T = unknown>(
   path: string,
   options: FetchOptions = {},
 ): Promise<T> {
   const { body, headers, ...rest } = options;
+  const rtHeaders = await realtimeHeader();
   const res = await fetch(path, {
     ...rest,
     headers: {
       "Content-Type": "application/json",
+      ...rtHeaders,
       ...(headers ?? {}),
     },
     body: body === undefined ? undefined : JSON.stringify(body),

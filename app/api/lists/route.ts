@@ -5,6 +5,7 @@ import { apiError } from "@/lib/api-error";
 import { BoardAccessError, requireBoardMember } from "@/lib/auth/board-access";
 import { createListSchema } from "@/lib/schemas/list";
 import { positionAfter } from "@/lib/position";
+import { broadcastBoard, socketIdFromRequest } from "@/lib/realtime/server";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +44,8 @@ export async function POST(req: Request) {
     },
     select: { id: true, boardId: true, name: true, position: true },
   });
+
+  await broadcastBoard(boardId, "list:created", { list }, socketIdFromRequest(req));
 
   return NextResponse.json({ data: { list } }, { status: 201 });
 }

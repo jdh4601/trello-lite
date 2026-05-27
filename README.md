@@ -18,8 +18,8 @@
 
 | 분야 | 사용 기술 |
 |------|---------|
-| Frontend | Next.js 15 · TypeScript · Tailwind · @dnd-kit · Socket.IO Client · TanStack Query · Dexie |
-| Backend | Node.js 24 · Express · Socket.IO · Prisma · PostgreSQL 16 |
+| Frontend | Next.js 15 · TypeScript · Tailwind · @dnd-kit · Pusher Channels · Dexie |
+| Backend | Next.js Route Handlers (Node) · Prisma · PostgreSQL 16 (Neon) · Pusher Channels |
 | Infra | Docker · Nginx · GitHub Actions · Vercel/VPS |
 
 ## 📚 문서
@@ -116,7 +116,11 @@ curl http://localhost/api/health     # Nginx → Next.js → Postgres
 1. **Vercel** — https://vercel.com/new 에서 `jdh4601/trello-lite` import
 2. **Storage** 탭 → **Neon Postgres** 추가 (`DATABASE_URL` 자동 주입)
 3. **Settings → Environment Variables** 에 `JWT_SECRET` 추가 (`openssl rand -base64 32`)
-4. push to `main` → 자동 배포 + 마이그레이션 자동 적용
+4. **(선택) 실시간 동기화** — Pusher 무료 계정 발급 후 환경변수 추가:
+   - 서버: `PUSHER_APP_ID`, `PUSHER_KEY`, `PUSHER_SECRET`, `PUSHER_CLUSTER`
+   - 클라이언트: `NEXT_PUBLIC_PUSHER_KEY`, `NEXT_PUBLIC_PUSHER_CLUSTER`
+   - 미설정 시 모든 CRUD는 정상 작동하지만 다른 브라우저에 즉시 반영되지는 않음 (새로고침 필요).
+5. push to `main` → 자동 배포 + 마이그레이션 자동 적용
 
 ## 🔗 저장소
 

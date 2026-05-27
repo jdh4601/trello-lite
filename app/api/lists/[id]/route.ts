@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { apiError } from "@/lib/api-error";
 import { BoardAccessError, requireBoardMember } from "@/lib/auth/board-access";
 import { updateListSchema } from "@/lib/schemas/list";
+import { broadcastBoard, socketIdFromRequest } from "@/lib/realtime/server";
 
 export const dynamic = "force-dynamic";
 
@@ -49,10 +50,12 @@ export async function PATCH(req: Request, { params }: Ctx) {
     select: { id: true, boardId: true, name: true, position: true },
   });
 
+  await broadcastBoard(boardId, "list:updated", { list }, socketIdFromRequest(req));
+
   return NextResponse.json({ data: { list } });
 }
 
-export async function DELETE(_req: Request, { params }: Ctx) {
+export async function DELETE(req: Request, { params }: Ctx) {
   const user = await getCurrentUser();
   if (!user) return apiError("UNAUTHORIZED", "로그인이 필요합니다.");
   const { id } = await params;
@@ -67,5 +70,6 @@ export async function DELETE(_req: Request, { params }: Ctx) {
   }
 
   await prisma.list.delete({ where: { id } });
+  await broadcastBoard(boardId, "list:deleted", { listId: id }, socketIdFromRequest(req));
   return new NextResponse(null, { status: 204 });
 }

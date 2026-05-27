@@ -5,6 +5,8 @@ import { apiError } from "@/lib/api-error";
 import { BoardAccessError, requireBoardMember } from "@/lib/auth/board-access";
 import { updateCardSchema } from "@/lib/schemas/card";
 import { minGap, PRECISION_THRESHOLD, rebalance } from "@/lib/position";
+import { broadcastBoard, socketIdFromRequest } from "@/lib/realtime/server";
+import { toRealtimeCard } from "@/lib/realtime/transform";
 
 export const dynamic = "force-dynamic";
 
@@ -60,6 +62,8 @@ export async function PATCH(req: Request, { params }: Ctx) {
   }
 
   const data = parsed.data;
+  const isMove = data.position !== undefined || data.listId !== undefined;
+  const fromListId = ctx.listId;
 
   const card = await prisma.$transaction(async (tx) => {
     const updated = await tx.card.update({
@@ -79,52 +83,64 @@ export async function PATCH(req: Request, { params }: Ctx) {
       },
     });
 
-    // If position changed, check whether the destination list needs rebalancing.
-    if (data.position !== undefined || data.listId !== undefined) {
-      const affectedListIds = new Set<string>([updated.listId]);
-      if (data.listId && data.listId !== ctx.listId) affectedListIds.add(ctx.listId);
+    if (!isMove) return updated;
 
-      for (const listId of affectedListIds) {
-        const siblings = await tx.card.findMany({
-          where: { listId },
-          orderBy: { position: "asc" },
-          select: { id: true, position: true },
-        });
-        if (siblings.length < 2) continue;
-        if (minGap(siblings.map((s) => s.position)) >= PRECISION_THRESHOLD) continue;
+    const affectedListIds = new Set<string>([updated.listId]);
+    if (data.listId && data.listId !== fromListId) affectedListIds.add(fromListId);
 
-        // Neighbors too close — re-space everything to integer steps. One
-        // transaction ensures clients never observe a partial state.
-        const positions = rebalance(siblings.length);
-        for (let i = 0; i < siblings.length; i++) {
-          await tx.card.update({
-            where: { id: siblings[i]!.id },
-            data: { position: positions[i] },
-          });
-        }
-      }
-
-      // Re-fetch in case the moving card was itself rebalanced.
-      return tx.card.findUniqueOrThrow({
-        where: { id },
-        select: {
-          id: true,
-          listId: true,
-          title: true,
-          description: true,
-          position: true,
-          dueDate: true,
-        },
+    for (const listId of affectedListIds) {
+      const siblings = await tx.card.findMany({
+        where: { listId },
+        orderBy: { position: "asc" },
+        select: { id: true, position: true },
       });
+      if (siblings.length < 2) continue;
+      if (minGap(siblings.map((s) => s.position)) >= PRECISION_THRESHOLD) continue;
+
+      const positions = rebalance(siblings.length);
+      for (let i = 0; i < siblings.length; i++) {
+        await tx.card.update({
+          where: { id: siblings[i]!.id },
+          data: { position: positions[i] },
+        });
+      }
     }
 
-    return updated;
+    return tx.card.findUniqueOrThrow({
+      where: { id },
+      select: {
+        id: true,
+        listId: true,
+        title: true,
+        description: true,
+        position: true,
+        dueDate: true,
+      },
+    });
   });
+
+  const socketId = socketIdFromRequest(req);
+  const payloadCard = toRealtimeCard(card);
+  if (isMove) {
+    await broadcastBoard(
+      ctx.list.boardId,
+      "card:moved",
+      { card: payloadCard, fromListId },
+      socketId,
+    );
+  } else {
+    await broadcastBoard(
+      ctx.list.boardId,
+      "card:updated",
+      { card: payloadCard },
+      socketId,
+    );
+  }
 
   return NextResponse.json({ data: { card } });
 }
 
-export async function DELETE(_req: Request, { params }: Ctx) {
+export async function DELETE(req: Request, { params }: Ctx) {
   const user = await getCurrentUser();
   if (!user) return apiError("UNAUTHORIZED", "로그인이 필요합니다.");
   const { id } = await params;
@@ -139,5 +155,11 @@ export async function DELETE(_req: Request, { params }: Ctx) {
   }
 
   await prisma.card.delete({ where: { id } });
+  await broadcastBoard(
+    ctx.list.boardId,
+    "card:deleted",
+    { cardId: id, listId: ctx.listId },
+    socketIdFromRequest(req),
+  );
   return new NextResponse(null, { status: 204 });
 }

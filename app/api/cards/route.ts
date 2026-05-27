@@ -5,6 +5,8 @@ import { apiError } from "@/lib/api-error";
 import { BoardAccessError, requireBoardMember } from "@/lib/auth/board-access";
 import { createCardSchema } from "@/lib/schemas/card";
 import { positionAfter } from "@/lib/position";
+import { broadcastBoard, socketIdFromRequest } from "@/lib/realtime/server";
+import { toRealtimeCard } from "@/lib/realtime/transform";
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +58,13 @@ export async function POST(req: Request) {
       dueDate: true,
     },
   });
+
+  await broadcastBoard(
+    list.boardId,
+    "card:created",
+    { card: toRealtimeCard(card) },
+    socketIdFromRequest(req),
+  );
 
   return NextResponse.json({ data: { card } }, { status: 201 });
 }

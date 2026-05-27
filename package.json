@@ -25,6 +25,8 @@
     "bcryptjs": "^3.0.3",
     "jose": "^6.2.3",
     "next": "^15.5.18",
+    "pusher": "^5.3.3",
+    "pusher-js": "^8.5.0",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "react-hook-form": "^7.76.1",

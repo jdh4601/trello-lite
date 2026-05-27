@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   DndContext,
@@ -20,6 +20,8 @@ import {
 } from "@dnd-kit/sortable";
 import { api, ApiClientError } from "@/lib/api-client";
 import { computeInsertPosition } from "@/lib/position";
+import { bindHandlers, subscribeBoard, unsubscribeBoard } from "@/lib/realtime/client";
+import type { CardRealtime, ListRealtime } from "@/lib/realtime/events";
 import { AddListInline } from "./AddListInline";
 import { Column } from "./Column";
 import type { CardData } from "./CardModal";
@@ -36,6 +38,43 @@ type DragItem = {
   fromListId: string;
 };
 
+function sortByPosition<T extends { position: number }>(items: readonly T[]): T[] {
+  return [...items].sort((a, b) => a.position - b.position);
+}
+
+function applyCardUpsert(
+  lists: BoardListData[],
+  card: CardRealtime,
+  fromListId?: string,
+): BoardListData[] {
+  return lists.map((list) => {
+    // Remove the card from its previous list (handles moves).
+    let cards = list.cards.filter((c) => c.id !== card.id);
+    if (fromListId && list.id === fromListId && list.id !== card.listId) {
+      return { ...list, cards };
+    }
+    if (list.id === card.listId) {
+      const next: CardData & { position: number } = {
+        id: card.id,
+        title: card.title,
+        description: card.description,
+        position: card.position,
+      };
+      cards = sortByPosition([...cards, next]);
+    }
+    return { ...list, cards };
+  });
+}
+
+function applyListUpsert(lists: BoardListData[], list: ListRealtime): BoardListData[] {
+  const existing = lists.find((l) => l.id === list.id);
+  const next: BoardListData = existing
+    ? { ...existing, name: list.name, position: list.position }
+    : { id: list.id, name: list.name, position: list.position, cards: [] };
+  const others = lists.filter((l) => l.id !== list.id);
+  return sortByPosition([...others, next]);
+}
+
 export function BoardView({
   boardId,
   lists: initialLists,
@@ -47,7 +86,38 @@ export function BoardView({
   const [lists, setLists] = useState(initialLists);
   const [active, setActive] = useState<DragItem | null>(null);
 
-  // Map cardId -> listId for quick lookup of source on drag end.
+  // Reset to server-truth when the route refreshes (e.g., after a navigation).
+  useEffect(() => {
+    setLists(initialLists);
+  }, [initialLists]);
+
+  useEffect(() => {
+    const channel = subscribeBoard(boardId);
+    if (!channel) return;
+
+    const unbind = bindHandlers(channel, {
+      "list:created": ({ list }) => setLists((prev) => applyListUpsert(prev, list)),
+      "list:updated": ({ list }) => setLists((prev) => applyListUpsert(prev, list)),
+      "list:deleted": ({ listId }) =>
+        setLists((prev) => prev.filter((l) => l.id !== listId)),
+      "card:created": ({ card }) => setLists((prev) => applyCardUpsert(prev, card)),
+      "card:updated": ({ card }) => setLists((prev) => applyCardUpsert(prev, card)),
+      "card:moved": ({ card, fromListId }) =>
+        setLists((prev) => applyCardUpsert(prev, card, fromListId)),
+      "card:deleted": ({ cardId, listId }) =>
+        setLists((prev) =>
+          prev.map((l) =>
+            l.id === listId ? { ...l, cards: l.cards.filter((c) => c.id !== cardId) } : l,
+          ),
+        ),
+    });
+
+    return () => {
+      unbind();
+      unsubscribeBoard(boardId);
+    };
+  }, [boardId]);
+
   const cardToList = useMemo(() => {
     const map = new Map<string, string>();
     for (const list of lists) for (const card of list.cards) map.set(card.id, list.id);
@@ -88,7 +158,6 @@ export function BoardView({
       if (!fromListId) return;
 
       const overId = String(over.id);
-      // `over.id` is either a list id (when dropping on an empty column) or a card id.
       const targetListId = lists.some((l) => l.id === overId)
         ? overId
         : cardToList.get(overId);
@@ -99,8 +168,6 @@ export function BoardView({
       const targetList = previousLists.find((l) => l.id === targetListId)!;
       const card = sourceList.cards.find((c) => c.id === cardId)!;
 
-      // Compute the target index inside the target list AFTER removing the
-      // dragged card from its source position.
       const remainingTargetCards =
         sourceList.id === targetList.id
           ? targetList.cards.filter((c) => c.id !== cardId)
@@ -109,7 +176,6 @@ export function BoardView({
       const toIndex =
         overCardIndex === -1 ? remainingTargetCards.length : overCardIndex;
 
-      // No-op move (same list, same slot).
       const currentIndex = sourceList.cards.findIndex((c) => c.id === cardId);
       if (sourceList.id === targetList.id && currentIndex === toIndex) return;
 
@@ -118,15 +184,12 @@ export function BoardView({
         toIndex,
       );
 
-      // Optimistic update.
       const optimistic = previousLists.map((list) => {
         if (list.id !== sourceList.id && list.id !== targetList.id) return list;
         let cards = list.cards.filter((c) => c.id !== cardId);
         if (list.id === targetList.id) {
           const moved = { ...card, position: newPosition };
-          cards = [...cards.slice(0, toIndex), moved, ...cards.slice(toIndex)].sort(
-            (a, b) => a.position - b.position,
-          );
+          cards = sortByPosition([...cards.slice(0, toIndex), moved, ...cards.slice(toIndex)]);
         }
         return { ...list, cards };
       });
@@ -137,7 +200,6 @@ export function BoardView({
           method: "PATCH",
           body: { listId: targetListId, position: newPosition },
         });
-        // Refresh in the background to absorb any server-side rebalance.
         router.refresh();
       } catch (err) {
         setLists(previousLists);
