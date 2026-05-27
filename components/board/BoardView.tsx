@@ -22,6 +22,8 @@ import { api, ApiClientError } from "@/lib/api-client";
 import { computeInsertPosition } from "@/lib/position";
 import { bindHandlers, subscribeBoard, unsubscribeBoard } from "@/lib/realtime/client";
 import type { CardRealtime, ListRealtime } from "@/lib/realtime/events";
+import { usePersistedState } from "@/lib/storage/use-persisted-state";
+import { StorageKeys } from "@/lib/storage/web-storage";
 import { AddListInline } from "./AddListInline";
 import { Column } from "./Column";
 import type { CardData } from "./CardModal";
@@ -105,7 +107,22 @@ export function BoardView({
   const router = useRouter();
   const [lists, setLists] = useState(initialLists);
   const [active, setActive] = useState<DragItem | null>(null);
-  const [filters, setFilters] = useState<BoardFilters>(EMPTY_FILTERS);
+  const [filters, setFilters] = usePersistedState<BoardFilters>(
+    "local",
+    StorageKeys.filters(boardId),
+    EMPTY_FILTERS,
+  );
+  const [collapsed, setCollapsed] = usePersistedState<string[]>(
+    "local",
+    StorageKeys.collapsedLists(boardId),
+    [],
+  );
+
+  function toggleCollapsed(listId: string) {
+    setCollapsed((prev) =>
+      prev.includes(listId) ? prev.filter((x) => x !== listId) : [...prev, listId],
+    );
+  }
 
   useEffect(() => {
     setLists(initialLists);
@@ -265,7 +282,12 @@ export function BoardView({
               items={list.cards.map((c) => c.id)}
               strategy={verticalListSortingStrategy}
             >
-              <Column list={list} boardLabels={boardLabels} />
+              <Column
+                list={list}
+                boardLabels={boardLabels}
+                collapsed={collapsed.includes(list.id)}
+                onToggleCollapsed={() => toggleCollapsed(list.id)}
+              />
             </SortableContext>
           ))}
           <AddListInline boardId={boardId} />

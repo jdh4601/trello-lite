@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, ApiClientError } from "@/lib/api-client";
+import { readJSON, remove, StorageKeys, writeJSON } from "@/lib/storage/web-storage";
 import type { Label } from "./types";
 
 export type CardData = {
@@ -34,13 +35,17 @@ export function CardModal({
 }) {
   const router = useRouter();
   const [title, setTitle] = useState(card.title);
-  const [description, setDescription] = useState(card.description ?? "");
+  const originalDescription = card.description ?? "";
+  const [description, setDescription] = useState(originalDescription);
   const [dueDate, setDueDate] = useState(toDateInputValue(card.dueDate ?? null));
   const [labelIds, setLabelIds] = useState<string[]>(
     (card.labels ?? []).map((l) => l.id),
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [draftRestored, setDraftRestored] = useState(false);
+  const draftKey = StorageKeys.cardDraft(card.id);
+  const initialized = useRef(false);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -49,6 +54,27 @@ export function CardModal({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  // Restore an in-progress draft from sessionStorage on first mount.
+  useEffect(() => {
+    if (initialized.current) return;
+    initialized.current = true;
+    const draft = readJSON<string | null>("session", draftKey, null);
+    if (draft && draft !== originalDescription) {
+      setDescription(draft);
+      setDraftRestored(true);
+    }
+  }, [draftKey, originalDescription]);
+
+  // Mirror description changes into the session draft until they're saved.
+  useEffect(() => {
+    if (!initialized.current) return;
+    if (description === originalDescription) {
+      remove("session", draftKey);
+      return;
+    }
+    writeJSON("session", draftKey, description);
+  }, [description, draftKey, originalDescription]);
 
   async function save() {
     const trimmedTitle = title.trim();
@@ -68,6 +94,7 @@ export function CardModal({
           labelIds,
         },
       });
+      remove("session", draftKey);
       router.refresh();
       onClose();
     } catch (err) {
@@ -77,17 +104,24 @@ export function CardModal({
     }
   }
 
-  async function remove() {
+  async function deleteCard() {
     if (!confirm("이 카드를 삭제하시겠습니까?")) return;
     setSaving(true);
     try {
       await api(`/api/cards/${card.id}`, { method: "DELETE" });
+      remove("session", draftKey);
       router.refresh();
       onClose();
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : "삭제 실패");
       setSaving(false);
     }
+  }
+
+  function discardDraft() {
+    setDescription(originalDescription);
+    remove("session", draftKey);
+    setDraftRestored(false);
   }
 
   function toggleLabel(id: string) {
@@ -122,6 +156,18 @@ export function CardModal({
             <label htmlFor="card-description" className="text-xs font-medium text-neutral-500">
               설명
             </label>
+            {draftRestored && (
+              <div className="flex items-center justify-between rounded bg-amber-50 px-2 py-1 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+                <span>이전에 저장하지 않은 작성 중인 내용을 복구했습니다.</span>
+                <button
+                  type="button"
+                  onClick={discardDraft}
+                  className="underline hover:no-underline"
+                >
+                  되돌리기
+                </button>
+              </div>
+            )}
             <textarea
               id="card-description"
               rows={5}
@@ -190,7 +236,7 @@ export function CardModal({
 
           <div className="flex items-center justify-between pt-2">
             <button
-              onClick={remove}
+              onClick={deleteCard}
               disabled={saving}
               className="rounded border border-red-300 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-800 dark:hover:bg-red-950"
             >

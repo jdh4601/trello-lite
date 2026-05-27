@@ -18,9 +18,13 @@ export type ColumnData = {
 export function Column({
   list,
   boardLabels,
+  collapsed = false,
+  onToggleCollapsed,
 }: {
   list: ColumnData;
   boardLabels: Label[];
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -88,21 +92,39 @@ export function Column({
             {list.name}
           </button>
         )}
-        <button
-          onClick={remove}
-          aria-label="리스트 삭제"
-          className="text-xs text-neutral-400 hover:text-red-600"
-        >
-          ✕
-        </button>
+        <div className="flex items-center gap-1">
+          {onToggleCollapsed && (
+            <button
+              onClick={onToggleCollapsed}
+              aria-label={collapsed ? "리스트 펼치기" : "리스트 접기"}
+              className="text-xs text-neutral-400 hover:text-neutral-700"
+            >
+              {collapsed ? "▸" : "▾"}
+            </button>
+          )}
+          <button
+            onClick={remove}
+            aria-label="리스트 삭제"
+            className="text-xs text-neutral-400 hover:text-red-600"
+          >
+            ✕
+          </button>
+        </div>
       </header>
 
-      <div className="space-y-2 px-1 py-2 min-h-[40px]">
-        {list.cards.map((card) => (
-          <CardItem key={card.id} card={card} boardLabels={boardLabels} />
-        ))}
-        <AddCardInline listId={list.id} />
-      </div>
+      {!collapsed && (
+        <div className="space-y-2 px-1 py-2 min-h-[40px]">
+          {list.cards.map((card) => (
+            <CardItem key={card.id} card={card} boardLabels={boardLabels} />
+          ))}
+          <AddCardInline listId={list.id} />
+        </div>
+      )}
+      {collapsed && (
+        <p className="px-2 py-1 text-xs text-neutral-500">
+          접힘 · {list.cards.length}개 카드
+        </p>
+      )}
     </div>
   );
 }

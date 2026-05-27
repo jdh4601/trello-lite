@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { BoardCard } from "@/components/boards/BoardCard";
 import { CreateBoardDialog } from "@/components/boards/CreateBoardDialog";
 import { LogoutButton } from "@/components/auth/LogoutButton";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "내 보드 — FlowBoard" };
@@ -32,6 +33,7 @@ export default async function BoardsPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <ThemeToggle />
             <CreateBoardDialog />
             <LogoutButton />
           </div>
