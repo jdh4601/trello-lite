@@ -74,6 +74,7 @@ env 추가 후 자동 재빌드되지 않으면:
 
 - **Deployments** 탭 → 최근 배포의 **... → Redeploy**
 
+Vercel은 `package.json`의 `vercel-build` 스크립트가 존재하면 그것을 사용합니다.
 빌드 로그에서 다음 단계가 순서대로 실행되는지 확인:
 
 ```
@@ -81,6 +82,9 @@ prisma generate
 prisma migrate deploy   ← 모든 마이그레이션 적용
 next build
 ```
+
+> 일반 `npm run build`(Docker용)는 `migrate deploy` 없이 동작합니다.
+> 이렇게 분리해야 CI Docker smoke 빌드가 DATABASE_URL 없이 통과합니다.
 
 ---
 
