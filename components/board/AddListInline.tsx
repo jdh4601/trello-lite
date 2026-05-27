@@ -3,12 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, ApiClientError } from "@/lib/api-client";
+import { useInFlight } from "@/lib/hooks/use-in-flight";
 
 export function AddListInline({ boardId }: { boardId: string }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState("");
-  const [submitting, setSubmitting] = useState(false);
+  const { inFlight: submitting, run } = useInFlight();
 
   async function submit() {
     const trimmed = name.trim();
@@ -17,17 +18,16 @@ export function AddListInline({ boardId }: { boardId: string }) {
       setName("");
       return;
     }
-    setSubmitting(true);
-    try {
-      await api("/api/lists", { method: "POST", body: { boardId, name: trimmed } });
-      setName("");
-      setEditing(false);
-      router.refresh();
-    } catch (err) {
-      alert(err instanceof ApiClientError ? err.message : "리스트 추가 실패");
-    } finally {
-      setSubmitting(false);
-    }
+    await run(async () => {
+      try {
+        await api("/api/lists", { method: "POST", body: { boardId, name: trimmed } });
+        setName("");
+        setEditing(false);
+        router.refresh();
+      } catch (err) {
+        alert(err instanceof ApiClientError ? err.message : "리스트 추가 실패");
+      }
+    });
   }
 
   if (!editing) {
