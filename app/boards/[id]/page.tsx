@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth/session";
 import { getBoardAccess } from "@/lib/auth/board-access";
 import { BoardView } from "@/components/board/BoardView";
+import { LabelManager } from "@/components/board/LabelManager";
 import { MembersPanel } from "@/components/board/MembersPanel";
 
 export const dynamic = "force-dynamic";
@@ -34,6 +35,10 @@ export default async function BoardDetailPage({
           user: { select: { id: true, name: true, email: true } },
         },
       },
+      labels: {
+        orderBy: { name: "asc" },
+        select: { id: true, name: true, color: true },
+      },
       lists: {
         orderBy: { position: "asc" },
         select: {
@@ -42,7 +47,14 @@ export default async function BoardDetailPage({
           position: true,
           cards: {
             orderBy: { position: "asc" },
-            select: { id: true, title: true, description: true, position: true },
+            select: {
+              id: true,
+              title: true,
+              description: true,
+              position: true,
+              dueDate: true,
+              labels: { select: { id: true, name: true, color: true } },
+            },
           },
         },
       },
@@ -65,6 +77,14 @@ export default async function BoardDetailPage({
     })),
   ];
 
+  const lists = board.lists.map((list) => ({
+    ...list,
+    cards: list.cards.map((c) => ({
+      ...c,
+      dueDate: c.dueDate ? c.dueDate.toISOString() : null,
+    })),
+  }));
+
   return (
     <main className="min-h-screen px-6 py-6">
       <div className="max-w-full space-y-4">
@@ -79,7 +99,8 @@ export default async function BoardDetailPage({
           <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
             {access.isOwner ? "소유자" : "멤버"}
           </span>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
+            <LabelManager boardId={board.id} initialLabels={board.labels} />
             <MembersPanel
               boardId={board.id}
               initialMembers={members}
@@ -89,7 +110,7 @@ export default async function BoardDetailPage({
           </div>
         </header>
 
-        <BoardView boardId={board.id} lists={board.lists} />
+        <BoardView boardId={board.id} lists={lists} boardLabels={board.labels} />
       </div>
     </main>
   );

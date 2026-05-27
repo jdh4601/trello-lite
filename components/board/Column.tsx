@@ -7,6 +7,7 @@ import { api, ApiClientError } from "@/lib/api-client";
 import { AddCardInline } from "./AddCardInline";
 import { CardItem } from "./CardItem";
 import type { CardData } from "./CardModal";
+import type { Label } from "./types";
 
 export type ColumnData = {
   id: string;
@@ -14,7 +15,13 @@ export type ColumnData = {
   cards: Array<CardData & { position: number }>;
 };
 
-export function Column({ list }: { list: ColumnData }) {
+export function Column({
+  list,
+  boardLabels,
+}: {
+  list: ColumnData;
+  boardLabels: Label[];
+}) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(list.name);
@@ -92,7 +99,7 @@ export function Column({ list }: { list: ColumnData }) {
 
       <div className="space-y-2 px-1 py-2 min-h-[40px]">
         {list.cards.map((card) => (
-          <CardItem key={card.id} card={card} />
+          <CardItem key={card.id} card={card} boardLabels={boardLabels} />
         ))}
         <AddCardInline listId={list.id} />
       </div>

@@ -30,6 +30,13 @@ export type CardRealtime = {
   description: string | null;
   position: number;
   dueDate: string | null;
+  labelIds: string[];
+};
+
+export type LabelRealtime = {
+  id: string;
+  name: string;
+  color: string;
 };
 
 export type ListRealtime = {

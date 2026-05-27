@@ -56,6 +56,7 @@ export async function POST(req: Request) {
       description: true,
       position: true,
       dueDate: true,
+      labels: { select: { id: true, name: true, color: true } },
     },
   });
 

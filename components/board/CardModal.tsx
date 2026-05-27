@@ -3,17 +3,42 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, ApiClientError } from "@/lib/api-client";
+import type { Label } from "./types";
 
 export type CardData = {
   id: string;
   title: string;
   description: string | null;
+  dueDate?: string | null;
+  labels?: Label[];
 };
 
-export function CardModal({ card, onClose }: { card: CardData; onClose: () => void }) {
+function toDateInputValue(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+export function CardModal({
+  card,
+  boardLabels,
+  onClose,
+}: {
+  card: CardData;
+  boardLabels: Label[];
+  onClose: () => void;
+}) {
   const router = useRouter();
   const [title, setTitle] = useState(card.title);
   const [description, setDescription] = useState(card.description ?? "");
+  const [dueDate, setDueDate] = useState(toDateInputValue(card.dueDate ?? null));
+  const [labelIds, setLabelIds] = useState<string[]>(
+    (card.labels ?? []).map((l) => l.id),
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,6 +64,8 @@ export function CardModal({ card, onClose }: { card: CardData; onClose: () => vo
         body: {
           title: trimmedTitle,
           description: description.trim() ? description.trim() : null,
+          dueDate: dueDate ? new Date(`${dueDate}T23:59:59`).toISOString() : null,
+          labelIds,
         },
       });
       router.refresh();
@@ -61,6 +88,12 @@ export function CardModal({ card, onClose }: { card: CardData; onClose: () => vo
       setError(err instanceof ApiClientError ? err.message : "삭제 실패");
       setSaving(false);
     }
+  }
+
+  function toggleLabel(id: string) {
+    setLabelIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
   }
 
   return (
@@ -86,20 +119,67 @@ export function CardModal({ card, onClose }: { card: CardData; onClose: () => vo
           </div>
 
           <div className="space-y-1">
-            <label
-              htmlFor="card-description"
-              className="text-xs font-medium text-neutral-500"
-            >
+            <label htmlFor="card-description" className="text-xs font-medium text-neutral-500">
               설명
             </label>
             <textarea
               id="card-description"
-              rows={6}
+              rows={5}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="카드에 대한 자세한 설명을 입력하세요…"
               className="w-full rounded border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-950"
             />
+          </div>
+
+          <div className="space-y-1">
+            <label htmlFor="card-due" className="text-xs font-medium text-neutral-500">
+              마감일
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                id="card-due"
+                type="date"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                className="rounded border border-neutral-300 px-2 py-1.5 text-sm dark:border-neutral-700 dark:bg-neutral-950"
+              />
+              {dueDate && (
+                <button
+                  onClick={() => setDueDate("")}
+                  className="text-xs text-neutral-500 hover:text-red-600"
+                >
+                  지우기
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-neutral-500">라벨</p>
+            {boardLabels.length === 0 ? (
+              <p className="text-xs text-neutral-400">
+                보드 라벨이 없습니다. 우측 상단 라벨 관리에서 추가하세요.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {boardLabels.map((l) => {
+                  const active = labelIds.includes(l.id);
+                  return (
+                    <button
+                      key={l.id}
+                      onClick={() => toggleLabel(l.id)}
+                      className={`flex items-center gap-1 rounded px-2 py-1 text-xs ${
+                        active ? "ring-2 ring-offset-1 ring-neutral-900 dark:ring-white" : ""
+                      }`}
+                      style={{ backgroundColor: l.color, color: "#fff" }}
+                    >
+                      {l.name}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {error && (

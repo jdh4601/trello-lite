@@ -8,6 +8,7 @@ export function toRealtimeCard(card: {
   description: string | null;
   position: number;
   dueDate: Date | null;
+  labels?: Array<{ id: string }>;
 }): CardRealtime {
   return {
     id: card.id,
@@ -16,5 +17,6 @@ export function toRealtimeCard(card: {
     description: card.description,
     position: card.position,
     dueDate: card.dueDate ? card.dueDate.toISOString() : null,
+    labelIds: card.labels?.map((l) => l.id) ?? [],
   };
 }

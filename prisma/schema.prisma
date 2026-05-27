@@ -34,6 +34,7 @@ model Board {
 
   lists   List[]
   members BoardMember[]
+  labels  Label[]
 
   @@index([ownerId])
 }
@@ -77,6 +78,18 @@ model Card {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   list        List      @relation(fields: [listId], references: [id], onDelete: Cascade)
+  labels      Label[]   @relation("CardLabels")
 
   @@index([listId, position])
+}
+
+model Label {
+  id      String @id @default(cuid())
+  boardId String
+  name    String
+  color   String
+  board   Board  @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  cards   Card[] @relation("CardLabels")
+
+  @@index([boardId])
 }

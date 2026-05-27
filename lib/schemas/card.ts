@@ -18,6 +18,7 @@ export const updateCardSchema = z
       .datetime({ message: "ISO 날짜 형식이 아닙니다." })
       .nullable()
       .optional(),
+    labelIds: z.array(z.string().min(1)).optional(),
   })
   .refine((v) => Object.keys(v).length > 0, {
     message: "변경할 필드가 없습니다.",

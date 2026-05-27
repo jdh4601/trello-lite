@@ -12,6 +12,16 @@ export const dynamic = "force-dynamic";
 
 type Ctx = { params: Promise<{ id: string }> };
 
+const CARD_SELECT = {
+  id: true,
+  listId: true,
+  title: true,
+  description: true,
+  position: true,
+  dueDate: true,
+  labels: { select: { id: true, name: true, color: true } },
+} as const;
+
 async function loadCardContext(cardId: string) {
   return prisma.card.findUnique({
     where: { id: cardId },
@@ -65,22 +75,28 @@ export async function PATCH(req: Request, { params }: Ctx) {
   const isMove = data.position !== undefined || data.listId !== undefined;
   const fromListId = ctx.listId;
 
+  // Label updates can only reference labels on the same board.
+  if (data.labelIds) {
+    const found = await prisma.label.findMany({
+      where: { id: { in: data.labelIds }, boardId: ctx.list.boardId },
+      select: { id: true },
+    });
+    if (found.length !== new Set(data.labelIds).size) {
+      return apiError("VALIDATION_FAILED", "잘못된 라벨이 포함되어 있습니다.");
+    }
+  }
+
   const card = await prisma.$transaction(async (tx) => {
+    const { labelIds, ...rest } = data;
     const updated = await tx.card.update({
       where: { id },
       data: {
-        ...data,
+        ...rest,
         dueDate:
-          data.dueDate === undefined ? undefined : data.dueDate ? new Date(data.dueDate) : null,
+          rest.dueDate === undefined ? undefined : rest.dueDate ? new Date(rest.dueDate) : null,
+        ...(labelIds ? { labels: { set: labelIds.map((labelId) => ({ id: labelId })) } } : {}),
       },
-      select: {
-        id: true,
-        listId: true,
-        title: true,
-        description: true,
-        position: true,
-        dueDate: true,
-      },
+      select: CARD_SELECT,
     });
 
     if (!isMove) return updated;
@@ -108,14 +124,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
 
     return tx.card.findUniqueOrThrow({
       where: { id },
-      select: {
-        id: true,
-        listId: true,
-        title: true,
-        description: true,
-        position: true,
-        dueDate: true,
-      },
+      select: CARD_SELECT,
     });
   });
 
