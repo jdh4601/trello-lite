@@ -3,10 +3,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, ApiClientError } from "@/lib/api-client";
+import { AddCardInline } from "./AddCardInline";
+import { CardItem } from "./CardItem";
+import type { CardData } from "./CardModal";
 
 export type ColumnData = {
   id: string;
   name: string;
+  cards: CardData[];
 };
 
 export function Column({ list }: { list: ColumnData }) {
@@ -80,7 +84,10 @@ export function Column({ list }: { list: ColumnData }) {
       </header>
 
       <div className="space-y-2 px-1 py-2 min-h-[40px]">
-        {/* 카드는 TRE-5에서 렌더링 */}
+        {list.cards.map((card) => (
+          <CardItem key={card.id} card={card} />
+        ))}
+        <AddCardInline listId={list.id} />
       </div>
     </div>
   );

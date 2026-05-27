@@ -42,6 +42,21 @@ model List {
   name     String
   position Float
   board    Board  @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  cards    Card[]
 
   @@index([boardId, position])
+}
+
+model Card {
+  id          String    @id @default(cuid())
+  listId      String
+  title       String
+  description String?
+  position    Float
+  dueDate     DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  list        List      @relation(fields: [listId], references: [id], onDelete: Cascade)
+
+  @@index([listId, position])
 }

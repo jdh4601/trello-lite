@@ -24,7 +24,15 @@ export default async function BoardDetailPage({
       ownerId: true,
       lists: {
         orderBy: { position: "asc" },
-        select: { id: true, name: true, position: true },
+        select: {
+          id: true,
+          name: true,
+          position: true,
+          cards: {
+            orderBy: { position: "asc" },
+            select: { id: true, title: true, description: true },
+          },
+        },
       },
     },
   });
@@ -46,7 +54,14 @@ export default async function BoardDetailPage({
 
         <div className="flex gap-4 overflow-x-auto pb-4">
           {board.lists.map((list) => (
-            <Column key={list.id} list={{ id: list.id, name: list.name }} />
+            <Column
+              key={list.id}
+              list={{
+                id: list.id,
+                name: list.name,
+                cards: list.cards,
+              }}
+            />
           ))}
           <AddListInline boardId={board.id} />
         </div>
