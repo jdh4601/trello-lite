@@ -3,12 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, ApiClientError } from "@/lib/api-client";
+import { useInFlight } from "@/lib/hooks/use-in-flight";
 
 export function AddCardInline({ listId }: { listId: string }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState("");
-  const [submitting, setSubmitting] = useState(false);
+  const { inFlight: submitting, run } = useInFlight();
 
   async function submit() {
     const trimmed = title.trim();
@@ -17,16 +18,15 @@ export function AddCardInline({ listId }: { listId: string }) {
       setTitle("");
       return;
     }
-    setSubmitting(true);
-    try {
-      await api("/api/cards", { method: "POST", body: { listId, title: trimmed } });
-      setTitle("");
-      router.refresh();
-    } catch (err) {
-      alert(err instanceof ApiClientError ? err.message : "카드 추가 실패");
-    } finally {
-      setSubmitting(false);
-    }
+    await run(async () => {
+      try {
+        await api("/api/cards", { method: "POST", body: { listId, title: trimmed } });
+        setTitle("");
+        router.refresh();
+      } catch (err) {
+        alert(err instanceof ApiClientError ? err.message : "카드 추가 실패");
+      }
+    });
   }
 
   if (!editing) {
