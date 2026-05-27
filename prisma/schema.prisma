@@ -12,10 +12,11 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Added in Slice 1 to satisfy Prisma; expanded in Slice 2 (TRE-2) with
-// passwordHash, name, and relations.
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  createdAt DateTime @default(now())
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
