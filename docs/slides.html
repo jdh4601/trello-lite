@@ -227,13 +227,13 @@
     /* === Architecture === */
     .arch-svg-wrap {
       flex: 1;
-      display: flex; align-items: center; justify-content: center;
-      margin-top: 8px;
+      display: flex; align-items: flex-start; justify-content: center;
+      margin-top: -16px;
       padding: 0 4px;
     }
     .arch-svg-wrap svg {
-      width: 100%; height: 100%;
-      max-height: 580px;
+      width: 100%; height: auto;
+      max-height: 620px;
     }
     .arch-node {
       fill: var(--surface);
@@ -436,6 +436,104 @@
     }
     .docker-feat strong { font-size: 0.9rem; }
     .docker-feat span { font-size: 0.8rem; color: var(--text-secondary); display: block; }
+
+    /* === Docker split layout (3-stage | docker-compose) === */
+    .docker-split {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 22px; margin-top: 8px;
+      flex: 1; min-height: 0;
+    }
+    .docker-split-col {
+      display: flex; flex-direction: column;
+      gap: 12px; min-height: 0;
+    }
+    .docker-split-title {
+      font-size: 11px; font-weight: 700;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--text-secondary);
+    }
+    .stage-row {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 12px 16px;
+      display: flex; gap: 14px; align-items: flex-start;
+      flex: 1; min-height: 0;
+    }
+    .stage-row .stage-num-vert {
+      background: var(--accent); color: white;
+      font-size: 11px; font-weight: 700;
+      padding: 4px 10px; border-radius: 999px;
+      letter-spacing: 0.04em; flex-shrink: 0;
+      align-self: flex-start; margin-top: 2px;
+    }
+    .stage-row .stage-body { flex: 1; min-width: 0; }
+    .stage-row h3 { font-size: 1rem; margin-bottom: 2px; }
+    .stage-row .stage-purpose {
+      color: var(--text-secondary);
+      font-size: 0.8rem; margin-bottom: 8px;
+    }
+    .stage-row .code-block { font-size: 11px; padding: 8px 10px; line-height: 1.55; }
+
+    .compose-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; padding: 14px 16px;
+      display: flex; flex-direction: column;
+      flex: 1; min-height: 0;
+    }
+    .compose-head {
+      display: flex; align-items: center; gap: 10px;
+      padding-bottom: 8px; border-bottom: 1px solid var(--border);
+      margin-bottom: 10px; flex-shrink: 0;
+    }
+    .compose-head .file {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px; font-weight: 700; color: var(--text);
+    }
+    .compose-head .tag {
+      margin-left: auto;
+      background: rgba(37,99,235,0.10); color: var(--accent);
+      font-size: 10.5px; font-weight: 600;
+      padding: 3px 9px; border-radius: 999px;
+      letter-spacing: 0.04em;
+    }
+    .compose-body {
+      flex: 1;
+      background: var(--code-bg); border-radius: 8px;
+      padding: 10px 12px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10.5px; line-height: 1.5;
+      color: var(--text); white-space: pre;
+      overflow: hidden; min-height: 0;
+    }
+    .compose-body .kw  { color: var(--accent-secondary); font-weight: 600; }
+    .compose-body .str { color: var(--positive); }
+    .compose-body .cmt { color: var(--text-secondary); font-style: italic; }
+    .compose-body .svc { color: var(--accent); font-weight: 700; }
+
+    .docker-highlight {
+      margin-top: 16px;
+      display: flex; align-items: center; gap: 16px;
+      background: linear-gradient(135deg, rgba(37,99,235,0.08), rgba(124,58,237,0.08));
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--accent);
+      border-radius: 12px; padding: 14px 22px;
+      flex-shrink: 0;
+    }
+    .docker-highlight .ic {
+      width: 40px; height: 40px; flex-shrink: 0;
+      border-radius: 10px;
+      background: rgba(37,99,235,0.12); color: var(--accent);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .docker-highlight strong { font-size: 1.02rem; }
+    .docker-highlight p {
+      color: var(--text-secondary);
+      font-size: 0.88rem; margin-top: 2px;
+    }
+    .docker-highlight code {
+      background: var(--code-bg);
+      padding: 1px 6px; border-radius: 5px;
+      font-size: 11.5px; font-family: 'JetBrains Mono', monospace;
+    }
 
     /* === Nginx === */
     /* === Nginx — flow + real config code === */
@@ -1285,77 +1383,88 @@
         <h2 class="slide-title animate d2">3단계 빌드로 최소 이미지</h2>
         <p class="slide-subtitle animate d3">최종 이미지에는 빌드 도구가 포함되지 않도록 stage를 분리.</p>
 
-        <div class="docker-stages">
-          <div class="stage-card animate d3">
-            <span class="stage-num">STAGE 1</span>
-            <h3>deps</h3>
-            <p class="stage-purpose">의존성 캐시 레이어</p>
-            <div class="code-block"><span class="keyword">FROM</span> node:24-alpine
+        <div class="docker-split">
+          <!-- LEFT: 3-stage build -->
+          <div class="docker-split-col animate d3">
+            <div class="docker-split-title">Dockerfile · 3-stage build</div>
+
+            <div class="stage-row">
+              <span class="stage-num-vert">STAGE 1</span>
+              <div class="stage-body">
+                <h3>deps</h3>
+                <p class="stage-purpose">의존성 캐시 레이어</p>
+                <div class="code-block"><span class="keyword">FROM</span> node:24-alpine
 <span class="keyword">COPY</span> package*.json prisma ./
 <span class="keyword">RUN</span> npm ci</div>
-          </div>
-          <div class="stage-card animate d4">
-            <span class="stage-num">STAGE 2</span>
-            <h3>build</h3>
-            <p class="stage-purpose">Next.js 빌드 + Prisma generate</p>
-            <div class="code-block"><span class="keyword">FROM</span> node:24-alpine
+              </div>
+            </div>
+
+            <div class="stage-row">
+              <span class="stage-num-vert">STAGE 2</span>
+              <div class="stage-body">
+                <h3>build</h3>
+                <p class="stage-purpose">Next.js 빌드 + Prisma generate</p>
+                <div class="code-block"><span class="keyword">FROM</span> node:24-alpine
 <span class="keyword">COPY</span> --from=deps node_modules
-<span class="keyword">RUN</span> prisma generate
-<span class="keyword">RUN</span> next build</div>
-          </div>
-          <div class="stage-card animate d5">
-            <span class="stage-num">STAGE 3</span>
-            <h3>runtime</h3>
-            <p class="stage-purpose">non-root 실행 + healthcheck</p>
-            <div class="code-block"><span class="keyword">USER</span> app
+<span class="keyword">RUN</span> prisma generate &amp;&amp; next build</div>
+              </div>
+            </div>
+
+            <div class="stage-row">
+              <span class="stage-num-vert">STAGE 3</span>
+              <div class="stage-body">
+                <h3>runtime</h3>
+                <p class="stage-purpose">non-root + healthcheck (최소 이미지)</p>
+                <div class="code-block"><span class="keyword">USER</span> app
 <span class="keyword">EXPOSE</span> 3000
 <span class="keyword">HEALTHCHECK</span> /api/health
 <span class="keyword">CMD</span> [<span class="string">"node"</span>,<span class="string">"server.js"</span>]</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- RIGHT: docker-compose.yml -->
+          <div class="docker-split-col animate d4">
+            <div class="docker-split-title">Orchestration · 3 services, 1 command</div>
+
+            <div class="compose-card">
+              <div class="compose-head">
+                <span class="file">docker-compose.yml</span>
+                <span class="tag">3 SERVICES</span>
+              </div>
+              <div class="compose-body"><span class="kw">services</span>:
+  <span class="svc">db</span>:                              <span class="cmt"># ⓐ PostgreSQL</span>
+    <span class="kw">image</span>: <span class="str">postgres:16-alpine</span>
+    <span class="kw">healthcheck</span>:
+      <span class="kw">test</span>: [<span class="str">"pg_isready -U flowboard"</span>]
+
+  <span class="svc">app</span>:                             <span class="cmt"># ⓑ Next.js (Dockerfile)</span>
+    <span class="kw">build</span>: { <span class="kw">context</span>: <span class="str">.</span> }
+    <span class="kw">environment</span>:
+      DATABASE_URL: <span class="str">postgresql://...@db:5432</span>
+    <span class="kw">depends_on</span>:
+      <span class="svc">db</span>: { <span class="kw">condition</span>: <span class="str">service_healthy</span> }
+    <span class="kw">expose</span>: [<span class="str">"3000"</span>]
+
+  <span class="svc">nginx</span>:                           <span class="cmt"># ⓒ Reverse Proxy</span>
+    <span class="kw">image</span>: <span class="str">nginx:1.27-alpine</span>
+    <span class="kw">ports</span>: [<span class="str">"80:80"</span>]
+    <span class="kw">volumes</span>:
+      - <span class="str">./nginx/nginx.conf:...:ro</span>
+    <span class="kw">depends_on</span>: [<span class="svc">app</span>]</div>
+            </div>
           </div>
         </div>
 
-        <div class="docker-features">
-          <div class="docker-feat animate d5">
-            <span class="dot"></span>
-            <div>
-              <strong>Multi-stage</strong>
-              <span>빌드 도구 미포함 → 최소 이미지</span>
-            </div>
+        <div class="docker-highlight animate d6">
+          <div class="ic">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+            </svg>
           </div>
-          <div class="docker-feat animate d6">
-            <span class="dot"></span>
-            <div>
-              <strong>Non-root user</strong>
-              <span><code class="mono">USER app</code> — 보안 강화</span>
-            </div>
-          </div>
-          <div class="docker-feat animate d6">
-            <span class="dot"></span>
-            <div>
-              <strong>HEALTHCHECK</strong>
-              <span><code class="mono">/api/health</code> — 컨테이너 상태 검증</span>
-            </div>
-          </div>
-          <div class="docker-feat animate d6">
-            <span class="dot"></span>
-            <div>
-              <strong>docker-compose</strong>
-              <span>app + Postgres + Nginx 한 번에 실행</span>
-            </div>
-          </div>
-          <div class="docker-feat animate d6">
-            <span class="dot"></span>
-            <div>
-              <strong>BuildKit cache</strong>
-              <span>CI에서 GHA 캐시 재사용</span>
-            </div>
-          </div>
-          <div class="docker-feat animate d6">
-            <span class="dot"></span>
-            <div>
-              <strong>CI smoke build</strong>
-              <span>모든 PR에서 Dockerfile 깨짐 방지</span>
-            </div>
+          <div>
+            <strong><code>docker compose up</code> 한 번으로 app + Postgres + Nginx 동시 기동</strong>
+            <p><code>depends_on</code> 체인 (<code>db</code> healthy → <code>app</code> → <code>nginx</code>) 으로 시작 순서가 보장되고, 같은 네트워크에서 <code>db:5432</code> · <code>app:3000</code> 으로 서로를 호스트명으로 호출.</p>
           </div>
         </div>
 

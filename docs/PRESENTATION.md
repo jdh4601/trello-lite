@@ -149,25 +149,58 @@
 
 ### Slide 7 — ② Docker (3:10–3:50, 40초)
 
-**비주얼**
-- 좌측: 3-stage 빌드 그림
-  ```
-  Stage 1: deps    (node_modules 캐시)
-       ↓
-  Stage 2: build   (prisma generate + next build)
-       ↓
-  Stage 3: runtime (non-root, ~150MB)
-  ```
-- 우측: `Dockerfile` 코드 일부 (스크린샷)
+**비주얼: 좌측 3-stage Dockerfile · 우측 docker-compose.yml · 하단 강조 바**
 
-**언급 포인트**
-- **Multi-stage**: 최종 이미지에 빌드 도구 미포함
-- **Non-root user** (`USER app`)
-- **HEALTHCHECK**: `/api/health`로 컨테이너 헬스 검증
-- `docker-compose.yml`: app + postgres + nginx 한 번에 실행
+#### 좌측 — Dockerfile 3-stage build (왜 3 단계인가)
 
-**스크립트**
-> "두 번째, Docker입니다. Dockerfile은 deps, build, runtime의 3-stage 구조로 최종 이미지를 가볍게 유지하고 non-root 사용자로 실행합니다. `docker-compose up`만 입력하면 앱·Postgres·Nginx가 한 번에 뜹니다. CI에서도 `docker build`로 smoke 테스트를 돌려 Dockerfile이 깨지지 않았는지 확인합니다."
+| Stage | 베이스 | 하는 일 | 다음 stage로 넘기는 것 |
+|-------|--------|---------|------------------------|
+| **1. deps** | `node:24-alpine` | `package.json` + `prisma/` 만 복사 후 `npm ci` | `node_modules` 만 |
+| **2. build** | `node:24-alpine` | `prisma generate` → `next build` (Next standalone 출력) | `.next/standalone`, `.next/static`, `prisma`, `@prisma` client |
+| **3. runtime** | `node:24-alpine` | non-root `app` 유저 생성, 필요한 산출물만 `COPY --chown=app:app`, `HEALTHCHECK` 등록 | 컨테이너 — `CMD ["node","server.js"]` |
+
+**핵심 효과**
+- `node_modules` 통째로가 아니라 **`.next/standalone` 출력만** 런타임에 들고 가므로 이미지가 가벼움 (~150MB)
+- `package.json` 이 안 바뀌면 Stage 1 (`npm ci`) 이 캐시 히트 → 재빌드 시간 단축
+- 빌드 도구 (`prisma CLI`, `next CLI`, devDeps) 는 runtime 이미지에 **없음** → 공격 표면 축소
+
+#### 우측 — docker-compose.yml (3 services, 1 command)
+
+| Service | 이미지 | 핵심 설정 | 역할 |
+|---------|--------|----------|------|
+| `db` | `postgres:16-alpine` | `healthcheck: pg_isready` | 상태 OK 되어야 다음 단계 진행 |
+| `app` | 위 Dockerfile 빌드 | `depends_on: db (service_healthy)` · `expose: 3000` | 외부에 포트 직접 노출 X — Nginx 뒤로 |
+| `nginx` | `nginx:1.27-alpine` | `ports: 80:80` · `volumes: ./nginx/nginx.conf:ro` · `depends_on: [app]` | 유일한 외부 진입점 |
+
+**언급 포인트 (보이스오버에서 짚을 키워드)**
+- **Multi-stage**: 최종 이미지에 빌드 도구 미포함 (Stage 2 산출물만 Stage 3 로)
+- **Non-root user** `USER app` — root 권한 escalation 차단
+- **HEALTHCHECK**: `wget /api/health` 30초 주기 — DB 연결 끊기면 컨테이너 자체가 unhealthy
+- **`depends_on` chain**: `db (healthy)` → `app` → `nginx` — 시작 순서가 코드로 보장
+- **서비스 디스커버리**: 같은 compose 네트워크 안에서 `db:5432`, `app:3000` 처럼 **호스트명으로** 서로 호출 (포트 매핑 불필요)
+- **단일 외부 포트**: 외부엔 80번만 열고 `app:3000`, `db:5432`는 컨테이너 내부망에만 노출
+- **재현성**: `docker compose up` 한 줄이면 노트북·CI·평가자 PC 어디서나 동일 환경 기동
+
+#### 하단 강조 바
+
+> `docker compose up` 한 번으로 **app + Postgres + Nginx** 동시 기동.
+> `depends_on` 체인 (`db` healthy → `app` → `nginx`) 으로 시작 순서가 보장되고, 같은 네트워크에서 `db:5432` · `app:3000` 으로 서로를 호스트명으로 호출.
+
+#### 스크립트 (40초)
+
+> "두 번째, Docker입니다. Dockerfile은 deps · build · runtime의 **3-stage** 구조입니다.
+>
+> Stage 1 `deps`는 `package.json` 만 복사해서 `npm ci`로 의존성을 받습니다 — 락 파일이 안 바뀌면 캐시 히트가 나서 재빌드가 빨라집니다.
+>
+> Stage 2 `build`는 `prisma generate` 와 `next build`로 **Next.js standalone** 출력을 만들고,
+>
+> Stage 3 `runtime`은 그 산출물만 받아 **non-root `app` 유저**로 실행합니다. `HEALTHCHECK`로 30초마다 `/api/health`를 찔러서 컨테이너 자체의 healthy 여부를 컨테이너 런타임이 판단하게 했습니다.
+>
+> 오른쪽 `docker-compose.yml`은 `db`, `app`, `nginx` **세 서비스**를 묶습니다. `depends_on` 체인으로 Postgres가 `pg_isready` 통과한 뒤에야 앱이 뜨고, 그 다음에 Nginx가 올라옵니다. 외부엔 80번 한 포트만 열려있고 `app:3000`, `db:5432`는 같은 compose 네트워크 안에서 호스트명으로만 접근됩니다.
+>
+> 결과적으로 평가자 PC든 CI든 `docker compose up` 한 줄로 동일한 3-tier가 재현됩니다. CI에서도 `docker build`로 smoke 테스트를 돌려 모든 PR 에서 Dockerfile이 깨지지 않았는지 확인합니다."
+
+> **녹화 팁**: 슬라이드 위 손가락(또는 커서)으로 좌측 STAGE 1 → 2 → 3 을 차례로, 그다음 우측 `db` → `app` → `nginx` 를 차례로 짚어주면 시청자가 "단방향 빌드 + 단방향 기동" 흐름을 한 번에 잡는다.
 
 ---
 
@@ -210,25 +243,55 @@
 
 ### Slide 10 — ⑤ PostgreSQL + Prisma (5:15–5:45, 30초)
 
-**비주얼**
-- ER 다이어그램 (간소화)
-  ```
-  User ──< BoardMember >── Board ──< List ──< Card >── Label
-                              │
-                              owner
-  ```
-- 마이그레이션 파일 6개 목록
-  ```
-  20260527010412_init_user
-  20260527011556_add_board
-  20260527011746_add_list
-  20260527011934_add_card
-  20260527061826_add_board_member
-  20260527062133_add_label
-  ```
+**비주얼: ER 다이어그램 (한 장으로 데이터 모델 전체 설명)**
 
-**스크립트**
-> "다섯 번째, 서버 DBMS입니다. PostgreSQL 16에 Prisma ORM을 얹어 타입 안전한 쿼리와 자동 마이그레이션을 사용했습니다. 마이그레이션 파일 6개가 슬라이스별로 코드와 함께 커밋되어, 어떤 환경에서도 `prisma migrate deploy` 한 번이면 동일한 스키마가 만들어집니다. 프로덕션 DB는 Vercel Marketplace의 Neon Postgres를 연동했습니다."
+```
+User ──1:N── Board ──1:N── List ──1:N── Card
+  │            │                          │
+  │            └─1:N─ Label ──N:M─────────┘
+  │                                       │
+  └──── BoardMember (JOIN · N:M) ─────────┤
+                                          │
+        CardAssignee (JOIN · N:M) ────────┘
+```
+
+**엔티티 4개 (실선 = 1:N 계층)**
+- `User` — `id (PK, cuid)`, `email (UNIQUE)`, `passwordHash`, `name`, `createdAt`
+- `Board` — `ownerId → User (FK)`, `name`, `createdAt`
+- `List` — `boardId → Board (FK)`, `name`, `position (Float)`
+- `Card` — `listId → List (FK)`, `title`, `position`, `dueDate?`, `description?`
+
+**조인 테이블 / N:M 관계 (점선 박스)**
+- `BoardMember` — `(boardId, userId)` 복합 PK + `role ∈ {OWNER, MEMBER}` → 멤버십·권한
+- `Label` — `boardId`별로 정의되고 `Card ↔ Label`은 Prisma 암묵적 N:M 조인 테이블
+- `CardAssignee` — 한 카드에 여러 담당자, 한 사용자가 여러 카드 (다이어그램에 추가된 확장 모델)
+
+**키·인덱스 표기 (다이어그램 범례)**
+- ● Primary Key, ◆ Foreign Key, ★ Unique
+- 모든 FK는 **`onDelete: Cascade`** — 보드 삭제 시 list / card / member / label까지 한 트랜잭션에 정리
+- 정렬 컬럼 `position`은 **복합 인덱스** (`[boardId, position]`, `[listId, position]`)로 칸반 정렬 쿼리 O(log n)
+- ID는 **cuid()** — DB 라운드트립 없이 클라이언트에서 생성 가능 → 오프라인 큐와 궁합
+
+**마이그레이션 파일 6개** (슬라이스별 커밋)
+```
+20260527010412_init_user
+20260527011556_add_board
+20260527011746_add_list
+20260527011934_add_card
+20260527061826_add_board_member
+20260527062133_add_label
+```
+
+**스크립트 (35초 — 5초만 추가됨)**
+> "다섯 번째, PostgreSQL 16 + Prisma ORM입니다. 데이터 모델은 **User → Board → List → Card** 의 1:N 단방향 계층을 뼈대로, 멤버십·라벨·담당자처럼 본질적으로 다대다인 관계는 **별도 조인 테이블** 로 분리했습니다.
+>
+> 예를 들어 `BoardMember`는 `(boardId, userId)` 를 복합 PK로 가지고 `role` 컬럼 하나로 OWNER/MEMBER 권한을 구분합니다. Label은 보드 단위로 정의되고 Card와는 N:M으로 연결되어 한 카드에 여러 라벨이 붙을 수 있습니다.
+>
+> 키 측면에서는 모든 외래키에 **`onDelete: Cascade`** 를 걸어 보드 하나를 지우면 그 아래 리스트·카드·멤버·라벨까지 한 트랜잭션에 정리되도록 했고, 카드 정렬 컬럼 `position`에는 `(listId, position)` 복합 인덱스를 걸어 드래그앤드롭 쿼리가 빠르게 동작합니다. ID는 cuid를 써서 클라이언트에서 미리 생성할 수 있게 만들었는데, 이게 오프라인 큐의 'optimistic insert' 와 자연스럽게 맞물립니다.
+>
+> 스키마 변경은 슬라이스별로 마이그레이션 6개로 쪼개 커밋했고, 어떤 환경에서도 `prisma migrate deploy` 한 번이면 동일한 스키마가 재현됩니다. 프로덕션 DB는 Vercel Marketplace의 Neon Postgres를 연동했습니다."
+
+> **녹화 팁**: ERD에서 손가락(또는 커서)으로 `User → Board → List → Card` 화살표를 차례로 짚어주면 시청자가 단방향 계층을 한눈에 잡는다. 점선 박스(BoardMember / CardAssignee)는 "여기가 N:M" 이라고 명시적으로 짚어줄 것.
 
 ---
 
