@@ -122,8 +122,14 @@
 | DB | PostgreSQL 16 (Neon) | 표준 RDB |
 | 캐시 | Dexie (IndexedDB) | Promise 기반 오프라인 큐 |
 
-**스크립트**
-> "기술 스택은 Next.js 15 풀스택 구조로 통일했습니다. 실시간은 Vercel serverless 환경에서 작동하도록 Socket.IO 대신 **Pusher Channels**를 사용했고, 오프라인 큐는 Dexie로 IndexedDB를 다룹니다."
+**스크립트 (35–40초)**
+> "기술 스택은 선택 이유를 크게 세 갈래로 정리했습니다.
+>
+> 먼저 **프론트엔드와 백엔드**입니다. Next.js 15 App Router 위에 TypeScript와 Tailwind를 얹어 한 프로젝트로 통일했고, 별도의 백엔드 서버를 두는 대신 Route Handlers로 API까지 같이 처리합니다. 덕분에 배포 단위와 타입 정의를 한 곳에서 공유할 수 있습니다. 드래그앤드롭은 React 19와 호환되고 키보드 접근성까지 챙긴 **@dnd-kit**을 사용했습니다.
+>
+> 다음은 **데이터 계층**입니다. PostgreSQL 16에 Prisma ORM을 얹은 구성인데, Prisma는 스키마 파일 하나가 곧 타입 정의가 되기 때문에 모델을 바꾸면 API와 컴포넌트 어디서든 컴파일러가 바로 잡아줍니다.
+>
+> 마지막으로 **실시간과 오프라인**입니다. Vercel serverless 환경에서는 WebSocket 커넥션을 직접 들고 있을 수 없어서, Socket.IO 대신 매니지드 서비스인 **Pusher Channels**로 실시간 브로드캐스트를 위임했습니다. IndexedDB는 raw API가 다루기 번거롭기 때문에 Promise 기반의 **Dexie**로 감싸 오프라인 큐를 관리합니다."
 
 ---
 
